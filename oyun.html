@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multiplayer Oyun Arenası</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f4f7f6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .app-wrapper {
+            display: flex;
+            gap: 20px;
+            max-width: 1000px;
+            width: 100%;
+            align-items: stretch;
+        }
+        .game-container, .chat-container {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+        }
+        .game-container {
+            text-align: center;
+            flex: 1.4;
+            position: relative;
+            min-height: 500px;
+        }
+        .chat-container {
+            flex: 0.7;
+            min-width: 280px;
+        }
+        
+        /* Ekran Yönetimi */
+        .screen { display: none; }
+        .active { display: flex; flex-direction: column; height: 100%; justify-content: center; align-items: center; }
+
+        /* Anasayfa Tasarımı */
+        .menu-title { color: #2c3e50; margin-bottom: 25px; }
+        .game-cards { display: flex; flex-direction: column; gap: 15px; width: 100%; max-width: 340px; }
+        .card-btn {
+            background: #34495e; color: white; border: none; padding: 15px;
+            font-size: 16px; border-radius: 8px; cursor: pointer; transition: 0.2s;
+            font-weight: 600; text-align: left; display: flex; justify-content: space-between; align-items: center;
+        }
+        .card-btn:hover { background: #2c3e50; transform: translateY(-2px); }
+        .card-btn.btn-num { background: #27ae60; }
+        .card-btn.btn-num:hover { background: #219653; }
+        .card-btn.btn-xox { background: #2980b9; }
+        .card-btn.btn-xox:hover { background: #2471a3; }
+        .card-btn.btn-c4 { background: #8e44ad; }
+        .card-btn.btn-c4:hover { background: #7d3c98; }
+
+        /* Ortak Elementler */
+        button {
+            background: #4CAF50; color: white; border: none; padding: 10px 20px;
+            font-size: 15px; border-radius: 6px; cursor: pointer; margin: 8px; transition: 0.2s;
+        }
+        button:hover { background: #45a049; }
+        .btn-switch { background: #ff9800; }
+        .btn-switch:hover { background: #e68a00; }
+        .btn-back { background: #e74c3c; position: absolute; top: 10px; left: 10px; padding: 6px 12px; font-size: 12px; margin: 0; }
+        .btn-back:hover { background: #c0392b; }
+        
+        input {
+            padding: 10px; font-size: 16px; width: 80%; border-radius: 6px;
+            border: 1px solid #ccc; margin-bottom: 10px; text-align: center; box-sizing: border-box;
+        }
+        .player-list { background: #eee; padding: 10px; border-radius: 6px; margin: 15px 0; text-align: left; width: 80%; }
+
+        /* XOX Ekranı */
+        .xox-board { display: grid; grid-template-columns: repeat(3, 100px); grid-gap: 8px; margin: 20px auto; }
+        .xox-cell {
+            width: 100px; height: 100px; background: #ecf0f1; border-radius: 8px;
+            display: flex; justify-content: center; align-items: center; font-size: 36px;
+            font-weight: bold; cursor: pointer; transition: 0.2s; user-select: none;
+        }
+        .xox-cell:hover { background: #bdc3c7; }
+        .xox-cell.X { color: #e74c3c; }
+        .xox-cell.O { color: #3498db; }
+
+        /* Connect Four (Pseudo-3D Gelişmiş Görsel) */
+        .c4-wrapper {
+            perspective: 1000px; margin: 20px auto;
+        }
+        .c4-board {
+            background: linear-gradient(145deg, #1e3c72, #2a5298);
+            padding: 15px; border-radius: 15px;
+            display: grid; grid-template-columns: repeat(7, 45px); grid-gap: 8px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.4), inset 0 2px 5px rgba(255,255,255,0.3);
+            transform: rotateX(10deg); border-bottom: 10px solid #152e59;
+        }
+        .c4-cell {
+            width: 45px; height: 45px; background: #f4f7f6; border-radius: 50%;
+            box-shadow: inset 0 4px 8px rgba(0,0,0,0.5); position: relative; cursor: pointer;
+        }
+        .c4-piece {
+            width: 100%; height: 100%; border-radius: 50%;
+            position: absolute; top: 0; left: 0;
+            animation: dropToken 0.4s ease-out forwards;
+            box-shadow: inset 0 -4px 8px rgba(0,0,0,0.3), 0 4px 6px rgba(0,0,0,0.2);
+        }
+        .c4-piece.red { background: radial-gradient(circle at 30% 30%, #ff4d4d, #b30000); }
+        .c4-piece.yellow { background: radial-gradient(circle at 30% 30%, #fff275, #cca300); }
+
+        @keyframes dropToken {
+            from { transform: translateY(-150px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        /* Canlı Sohbet Stilleri */
+        #chat-messages {
+            flex-grow: 1; border: 1px solid #eef2f5; background: #fafbfc;
+            border-radius: 6px; padding: 10px; overflow-y: auto; height: 350px;
+            text-align: left; margin-bottom: 10px; font-size: 14px;
+        }
+        .chat-msg { margin-bottom: 8px; word-break: break-word; line-height: 1.4; }
+        .chat-msg .sender { font-weight: bold; }
+        .chat-msg.p1 .sender { color: #e74c3c; }
+        .chat-msg.p2 .sender { color: #3498db; }
+        .chat-msg.spectator .sender { color: #777; }
+        .chat-input-area { display: flex; gap: 8px; }
+        .chat-input-area input { flex-grow: 1; margin-bottom: 0!important; padding: 8px!important; font-size: 14px!important; }
+        .chat-input-area button { margin: 0!important; padding: 8px 14px!important; font-size: 14px!important; }
+
+        /* Özel Efekt Animasyonları (Sayı Oyunu) */
+        @keyframes growUp { from { font-size: 12px; opacity: 0; } to { font-size: 44px; opacity: 1; } }
+        @keyframes shrinkDown { from { font-size: 72px; opacity: 0; } to { font-size: 24px; opacity: 1; } }
+        .soguk { color: #007bff; font-weight: bold; animation: growUp 0.8s forwards; }
+        .sicak { color: #dc3545; font-weight: bold; animation: shrinkDown 0.8s forwards; }
+        .tebrik { color: #28a745; font-size: 28px; font-weight: bold; }
+    </style>
+
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+</head>
+<body>
+
+<div class="app-wrapper">
+    <div class="game-container" id="main-game-wrapper">
+        
+        <div id="screen-home" class="screen active">
+            <h2 class="menu-title">🎮 Çevrimiçi Oyun Arenası</h2>
+            <div class="game-cards">
+                <button class="card-btn btn-num" onclick="navigateTo('number')">Sayı Tahmin Oyunu <span>➔</span></button>
+                <button class="card-btn btn-xox" onclick="navigateTo('xox')">XOX (Tic-Tac-Toe) <span>➔</span></button>
+                <button class="card-btn btn-c4" onclick="navigateTo('connect4')">Connect Four (4row) <span>➔</span></button>
+            </div>
+        </div>
+
+        <div id="mod-number" class="screen">
+            <button class="btn-back" onclick="leaveCurrentGame()">✕ Ayrıl</button>
+            <div id="num-lobby" class="sub-view active">
+                <h3>Sayı Tahmini: Tarafını Seç</h3>
+                <button onclick="selectRole('p1')">Oyuncu 1 Ol</button>
+                <button onclick="selectRole('p2')">Oyuncu 2 Ol</button>
+                <div class="player-list"><div id="lobby-status">Yükleniyor...</div></div>
+                <button id="btn-switch" class="btn-switch" style="display:none;" onclick="switchRole()">Taraf Değiştir</button>
+                <div id="lobby-wait-msg" style="color:#666; font-style:italic;"></div>
+            </div>
+            <div id="num-setup" class="sub-view" style="display:none;">
+                <h3>Rakibinin Bilmesi İçin Bir Sayı Tut (0 - 150)</h3>
+                <input type="number" id="secret-number" placeholder="Örn: 42" min="0" max="150"><br>
+                <button onclick="saveSecretNumber()">Kaydet</button>
+                <p id="setup-wait" style="color: #666;"></p>
+            </div>
+            <div id="num-game" class="sub-view" style="display:none;">
+                <h4 id="turn-indicator">Sıra Bekleniyor...</h4>
+                <div id="game-controls" style="display: none;">
+                    <input type="number" id="guess-input" placeholder="0 - 150 arası tahmininiz" min="0" max="150"><br>
+                    <button onclick="makeGuess()">Tahmin Et</button>
+                </div>
+                <div id="feedback-area" style="margin-top:20px; min-height:80px;"></div>
+            </div>
+        </div>
+
+        <div id="mod-xox" class="screen">
+            <button class="btn-back" onclick="leaveCurrentGame()">✕ Ayrıl</button>
+            <div id="xox-lobby-view">
+                <h3>XOX Arenası: Taraf Seç</h3>
+                <button onclick="xoxSelectRole('p1')">Oyuncu 1 Ol (X)</button>
+                <button onclick="xoxSelectRole('p2')">Oyuncu 2 Ol (O)</button>
+                <div class="player-list" id="xox-lobby-status">Yükleniyor...</div>
+            </div>
+            <div id="xox-game-view" style="display:none; width:100%;">
+                <h3 id="xox-turn-indicator">Sıra Bekleniyor...</h3>
+                <div class="xox-board" id="xox-board-element">
+                    <div class="xox-cell" data-index="0" onclick="xoxClickCell(0)"></div>
+                    <div class="xox-cell" data-index="1" onclick="xoxClickCell(1)"></div>
+                    <div class="xox-cell" data-index="2" onclick="xoxClickCell(2)"></div>
+                    <div class="xox-cell" data-index="3" onclick="xoxClickCell(3)"></div>
+                    <div class="xox-cell" data-index="4" onclick="xoxClickCell(4)"></div>
+                    <div class="xox-cell" data-index="5" onclick="xoxClickCell(5)"></div>
+                    <div class="xox-cell" data-index="6" onclick="xoxClickCell(6)"></div>
+                    <div class="xox-cell" data-index="7" onclick="xoxClickCell(7)"></div>
+                    <div class="xox-cell" data-index="8" onclick="xoxClickCell(8)"></div>
+                </div>
+                <div id="xox-result-area"></div>
+            </div>
+        </div>
+
+        <div id="mod-connect4" class="screen">
+            <button class="btn-back" onclick="leaveCurrentGame()">✕ Ayrıl</button>
+            <div id="c4-lobby-view">
+                <h3>Connect Four: Taraf Seç</h3>
+                <button onclick="c4SelectRole('p1')">Oyuncu 1 Ol (Kırmızı)</button>
+                <button onclick="c4SelectRole('p2')">Oyuncu 2 Ol (Sarı)</button>
+                <div class="player-list" id="c4-lobby-status">Yükleniyor...</div>
+            </div>
+            <div id="c4-game-view" style="display:none; width:100%;">
+                <h3 id="c4-turn-indicator">Sıra Bekleniyor...</h3>
+                <div class="c4-wrapper">
+                    <div class="c4-board" id="c4-board-element"></div>
+                </div>
+                <div id="c4-result-area"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="chat-container">
+        <h3 id="chat-title">Canlı Sohbet (Genel)</h3>
+        <hr style="width:100%; border:0; border-top:1px solid #eee;">
+        <div id="chat-messages"></div>
+        <div class="chat-input-area">
+            <input type="text" id="chat-input" placeholder="Mesaj yazın..." onkeydown="if(event.key === 'Enter') sendChatMessage()">
+            <button onclick="sendChatMessage()">Gönder</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Firebase Yapılandırması
+    const firebaseConfig = {
+        apiKey: "AIzaSyAIR-kFohmfBvnib5OMu8LQk2W--PEixO8",
+        authDomain: "sayioyunu-d5f0d.firebaseapp.com",
+        databaseURL: "https://sayioyunu-d5f0d-default-rtdb.firebaseio.com",
+        projectId: "sayioyunu-d5f0d",
+        storageBucket: "sayioyunu-d5f0d.firebasestorage.app",
+        messagingSenderId: "898880768996",
+        appId: "1:898880768996:web:7744c40c33034425fe55f1",
+        measurementId: "G-3SK4DV6V6E"
+    };
+    
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    let myId = sessionStorage.getItem('game_user_id') || 'user_' + Math.random().toString(36).substring(2, 9);
+    sessionStorage.setItem('game_user_id', myId);
+
+    let currentGameMode = 'home'; // 'home', 'number', 'xox', 'connect4'
+    let myRole = null;
+    let currentChatRef = null;
+
+    // Firebase Dağıtılmış Dinleyicileri (Global References)
+    let fbRefPlayers = null, fbRefState = null, fbRefBoard = null;
+
+    // Sayfa aniden kapandığında aktif temizlik
+    window.addEventListener('beforeunload', () => { leaveCurrentGame(); });
+
+    function navigateTo(mode) {
+        leaveCurrentGame();
+        currentGameMode = mode;
+        
+        // UI Ekran Geçişi
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        if(mode === 'number') document.getElementById('mod-number').classList.add('active');
+        if(mode === 'xox') document.getElementById('mod-xox').classList.add('active');
+        if(mode === 'connect4') document.getElementById('mod-connect4').classList.add('active');
+        if(mode === 'home') document.getElementById('screen-home').classList.add('active');
+
+        initChatRoom(mode);
+        if(mode !== 'home') initGameLogic(mode);
+    }
+
+    function leaveCurrentGame() {
+        if(fbRefPlayers && myId) fbRefPlayers.child(myId).remove();
+        if(fbRefPlayers) fbRefPlayers.off();
+        if(fbRefState) fbRefState.off();
+        if(fbRefBoard) fbRefBoard.off();
+        
+        myRole = null;
+        fbRefPlayers = fbRefState = fbRefBoard = null;
+        
+        if(currentGameMode !== 'home') {
+            currentGameMode = 'home';
+            navigateTo('home');
+        }
+    }
+
+    // ================= SOHBET MANTIĞI =================
+    function initChatRoom(mode) {
+        if(currentChatRef) currentChatRef.off();
+        document.getElementById('chat-messages').innerHTML = "";
+        
+        let roomName = "Genel";
+        if(mode === 'number') roomName = "Sayı Tahmini";
+        if(mode === 'xox') roomName = "XOX Odası";
+        if(mode === 'connect4') roomName = "Connect 4 Odası";
+        document.getElementById('chat-title').innerText = `Canlı Sohbet (${roomName})`;
+
+        currentChatRef = db.ref(`arena/chat/${mode}`);
+        currentChatRef.limitToLast(40).on('child_added', (snapshot) => {
+            const data = snapshot.val();
+            const messagesDiv = document.getElementById('chat-messages');
+            const msgEl = document.createElement('div');
+            msgEl.className = `chat-msg ${data.role}`;
+            msgEl.innerHTML = `<span class="sender">${data.sender}:</span> ${escapeHTML(data.msg)}`;
+            messagesDiv.appendChild(msgEl);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        });
+    }
+
+    function sendChatMessage() {
+        const input = document.getElementById('chat-input');
+        const text = input.value.trim();
+        if(!text || !currentChatRef) return;
+
+        let name = "İzleyici";
+        if(myRole === 'p1') name = "Oyuncu 1";
+        if(myRole === 'p2') name = "Oyuncu 2";
+
+        currentChatRef.push({
+            sender: name,
+            role: myRole || 'spectator',
+            msg: text,
+            timestamp: firebase.database.ServerValue.TIMESTAMP
+        });
+        input.value = "";
+    }
+
+    function escapeHTML(str) {
+        return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag));
+    }
+
+
+    // ================= MODÜL SEÇİCİ / INITIALIZER =================
+    function initGameLogic(mode) {
+        fbRefPlayers = db.ref(`arena/rooms/${mode}/players`);
+        fbRefState = db.ref(`arena/rooms/${mode}/state`);
+        fbRefBoard = db.ref(`arena/rooms/${mode}/board`);
+
+        fbRefPlayers.child(myId).onDisconnect().remove();
+
+        if(mode === 'number') initNumberGame();
+        if(mode === 'xox') initXoxGame();
+        if(mode === 'connect4') initConnect4Game();
+    }
+
+
+    // ================= 1. SAYI TAHMİN OYUNU MANTIĞI =================
+    let numPlayersData = {}, numGameState = {};
+    function initNumberGame() {
+        // Alt görünümleri resetle
+        document.getElementById('num-lobby').style.display = 'block';
+        document.getElementById('num-setup').style.display = 'none';
+        document.getElementById('num-game').style.display = 'none';
+
+        fbRefPlayers.on('value', (snapshot) => {
+            numPlayersData = snapshot.val() || {};
+            updateLobbyUI();
+            checkNumberGameProgression();
+        });
+        fbRefState.on('value', (snapshot) => {
+            numGameState = snapshot.val() || { turn: 'p1', status: 'lobby' };
+            updateNumberGameUI();
+        });
+    }
+
+    function selectRole(role) {
+        myRole = role;
+        fbRefPlayers.child(myId).set({ role: role, secret: null, lastGuess: null, feedback: '' });
+    }
+    function switchRole() { selectRole(myRole === 'p1' ? 'p2' : 'p1'); }
+
+    function updateLobbyUI() {
+        let p1Count = 0, p2Count = 0, html = "";
+        Object.keys(numPlayersData).forEach(id => {
+            const p = numPlayersData[id];
+            const isMe = id === myId ? " (Siz)" : " (Rakip)";
+            if(p.role === 'p1') { p1Count++; html += `<div>🔴 Oyuncu 1: ${id}${isMe}</div>`; }
+            if(p.role === 'p2') { p2Count++; html += `<div>🔵 Oyuncu 2: ${id}${isMe}</div>`; }
+        });
+        document.getElementById('lobby-status').innerHTML = html || "Kimse yok, ilk seçimi sen yap!";
+        
+        const btnSwitch = document.getElementById('btn-switch');
+        const waitMsg = document.getElementById('lobby-wait-msg');
+        if((p1Count > 1 && myRole === 'p1') || (p2Count > 1 && myRole === 'p2')) {
+            btnSwitch.style.display = 'inline-block';
+            waitMsg.innerText = "Aynı tarafı seçtiniz. Birinizin değiştirmesi gerekiyor.";
+        } else {
+            btnSwitch.style.display = 'none';
+            waitMsg.innerText = (p1Count === 1 && p2Count === 1) ? "Kadrolar tamam! Sayı belirleniyor..." : "Diğer oyuncu bekleniyor...";
+        }
+    }
+
+    function checkNumberGameProgression() {
+        const list = Object.values(numPlayersData);
+        const p1 = list.find(p => p.role === 'p1');
+        const p2 = list.find(p => p.role === 'p2');
+
+        if(list.length < 2 || !p1 || !p2) {
+            if(numGameState.status !== 'lobby') fbRefState.set({ status: 'lobby', turn: 'p1', winner: null });
+            document.getElementById('num-lobby').style.display = 'block';
+            document.getElementById('num-setup').style.display = 'none';
+            document.getElementById('num-game').style.display = 'none';
+            return;
+        }
+        if(p1.secret !== undefined && p1.secret !== null && p2.secret !== undefined && p2.secret !== null) {
+            if(numGameState.status !== 'playing' && numGameState.status !== 'finished') {
+                fbRefState.set({ status: 'playing', turn: 'p1' });
+            }
+        } else {
+            document.getElementById('num-lobby').style.display = 'none';
+            document.getElementById('num-setup').style.display = 'block';
+            document.getElementById('num-game').style.display = 'none';
+            document.getElementById('setup-wait').innerText = (myRole && numPlayersData[myId]?.secret !== null && numPlayersData[myId]?.secret !== undefined) ? "Sayın kaydedildi! Rakip bekleniyor..." : "";
+        }
+    }
+
+    function saveSecretNumber() {
+        const num = parseInt(document.getElementById('secret-number').value);
+        if(isNaN(num) || num < 0 || num > 150) {
+            return alert("Lütfen 0 ile 150 arasında geçerli bir sayı girin!");
+        }
+        fbRefPlayers.child(myId).update({ secret: num });
+    }
+
+    function updateNumberGameUI() {
+        const list = Object.values(numPlayersData);
+        if(numGameState.status === 'lobby' || list.length < 2) return;
+
+        const p1 = list.find(p => p.role === 'p1');
+        const p2 = list.find(p => p.role === 'p2');
+        if(!p1 || !p2 || p1.secret === null || p2.secret === null) return;
+
+        document.getElementById('num-lobby').style.display = 'none';
+        document.getElementById('num-setup').style.display = 'none';
+        document.getElementById('num-game').style.display = 'block';
+
+        const indicator = document.getElementById('turn-indicator');
+        const controls = document.getElementById('game-controls');
+        const feedback = document.getElementById('feedback-area');
+
+        if(numGameState.status === 'finished') {
+            controls.style.display = 'none';
+            indicator.innerHTML = numGameState.winner === myRole ? "🎉 TEBRİKLER, KAZANDINIZ!" : "💀 OYUN BİTTİ! Rakibiniz doğru bildi.";
+            feedback.innerHTML = `<button onclick="restartNumberGame()" class="btn-switch">Yeniden Başlat</button>`;
+            return;
+        }
+
+        if(numGameState.turn === myRole) {
+            indicator.innerText = "SIRA SİZDE! Tahmininizi girin.";
+            controls.style.display = 'block';
+        } else {
+            indicator.innerText = "Rakibin hamlesi bekleniyor...";
+            controls.style.display = 'none';
+        }
+
+        const myData = numPlayersData[myId];
+        if(myData && myData.feedback) {
+            let cls = myData.feedback === "SOĞUK" ? "soguk" : (myData.feedback === "SICAK" ? "sicak" : "tebrik");
+            feedback.innerHTML = `<div class="${cls}">${myData.feedback}</div>`;
+        } else { feedback.innerHTML = ""; }
+    }
+
+    function makeGuess() {
+        const guess = parseInt(document.getElementById('guess-input').value);
+        if(isNaN(guess) || guess < 0 || guess > 150) {
+            return alert("Lütfen 0 ile 150 arasında geçerli bir tahmin girin!");
+        }
+        const oppId = Object.keys(numPlayersData).find(id => id !== myId);
+        const oppSecret = numPlayersData[oppId].secret;
+
+        let res = guess < oppSecret ? "SOĞUK" : (guess > oppSecret ? "SICAK" : "Aferin iyi tahmin");
+        fbRefPlayers.child(myId).update({ lastGuess: guess, feedback: res });
+
+        if(res !== "Aferin iyi tahmin") {
+            fbRefState.update({ turn: (myRole === 'p1' ? 'p2' : 'p1') });
+        } else {
+            fbRefState.update({ status: 'finished', winner: myRole });
+        }
+        document.getElementById('guess-input').value = "";
+    }
+
+    function restartNumberGame() {
+        Object.keys(numPlayersData).forEach(id => {
+            fbRefPlayers.child(id).update({ secret: null, lastGuess: null, feedback: '' });
+        });
+        fbRefState.set({ status: 'lobby', turn: 'p1', winner: null });
+    }
+
+
+    // ================= 2. XOX OYUN MANTIĞI =================
+    let xoxPlayers = {}, xoxState = {}, xoxBoard = Array(9).fill("");
+    function initXoxGame() {
+        document.getElementById('xox-lobby-view').style.display = 'block';
+        document.getElementById('xox-game-view').style.display = 'none';
+
+        fbRefPlayers.on('value', (snapshot) => {
+            xoxPlayers = snapshot.val() || {};
+            updateXoxLobbyUI();
+            checkXoxProgression();
+        });
+        fbRefState.on('value', (snapshot) => {
+            xoxState = snapshot.val() || { status: 'lobby', turn: 'p1' };
+            updateXoxGameUI();
+        });
+        fbRefBoard.on('value', (snapshot) => {
+            xoxBoard = snapshot.val() || Array(9).fill("");
+            renderXoxBoard();
+        });
+    }
+
+    function xoxSelectRole(role) {
+        myRole = role;
+        fbRefPlayers.child(myId).set({ role: role });
+    }
+
+    function updateXoxLobbyUI() {
+        let html = "";
+        Object.keys(xoxPlayers).forEach(id => {
+            const isMe = id === myId ? " (Siz)" : " (Rakip)";
+            html += `<div>${xoxPlayers[id].role === 'p1' ? '🔴 X' : '🔵 O'}: ${id}${isMe}</div>`;
+        });
+        document.getElementById('xox-lobby-status').innerHTML = html || "Rolünüzü seçin.";
+    }
+
+    function checkXoxProgression() {
+        const list = Object.values(xoxPlayers);
+        const p1 = list.find(p => p.role === 'p1');
+        const p2 = list.find(p => p.role === 'p2');
+
+        if(list.length === 2 && p1 && p2) {
+            if(xoxState.status === 'lobby') {
+                fbRefBoard.set(Array(9).fill(""));
+                fbRefState.set({ status: 'playing', turn: 'p1', winner: null });
+            }
+        } else {
+            if(xoxState.status !== 'lobby') fbRefState.set({ status: 'lobby', turn: 'p1' });
+        }
+    }
+
+    function updateXoxGameUI() {
+        if(xoxState.status === 'lobby') {
+            document.getElementById('xox-lobby-view').style.display = 'block';
+            document.getElementById('xox-game-view').style.display = 'none';
+            return;
+        }
+        document.getElementById('xox-lobby-view').style.display = 'none';
+        document.getElementById('xox-game-view').style.display = 'block';
+
+        const ind = document.getElementById('xox-turn-indicator');
+        const resArea = document.getElementById('xox-result-area');
+
+        if(xoxState.status === 'finished') {
+            if(xoxState.winner === 'draw') ind.innerText = "Oyun Berabere Bitti!";
+            else ind.innerText = xoxState.winner === myRole ? "🎉 Kazandınız!" : "💀 Kaybettiniz.";
+            resArea.innerHTML = `<button onclick="restartXox()" class="btn-switch">Yeniden Başlat</button>`;
+        } else {
+            ind.innerText = xoxState.turn === myRole ? "Sıra Sizde (Senin Hamlen)" : "Rakibin oynaması bekleniyor...";
+            resArea.innerHTML = "";
+        }
+    }
+
+    function renderXoxBoard() {
+        const cells = document.querySelectorAll('.xox-cell');
+        cells.forEach((cell, i) => {
+            cell.innerText = xoxBoard[i] || "";
+            cell.className = `xox-cell ${xoxBoard[i]}`;
+        });
+    }
+
+    function xoxClickCell(index) {
+        if(xoxState.status !== 'playing' || xoxState.turn !== myRole || xoxBoard[index]) return;
+        
+        xoxBoard[index] = myRole === 'p1' ? 'X' : 'O';
+        fbRefBoard.set(xoxBoard);
+
+        // Kazanma Kombinasyonları
+        const winPatterns = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+        let winner = null;
+        for (let p of winPatterns) {
+            if(xoxBoard[p[0]] && xoxBoard[p[0]] === xoxBoard[p[1]] && xoxBoard[p[0]] === xoxBoard[p[2]]) {
+                winner = myRole;
+            }
+        }
+
+        if(!winner && !xoxBoard.includes("")) winner = 'draw';
+
+        if(winner) {
+            fbRefState.set({ status: 'finished', winner: winner });
+        } else {
+            fbRefState.update({ turn: myRole === 'p1' ? 'p2' : 'p1' });
+        }
+    }
+
+    function restartXox() {
+        fbRefBoard.set(Array(9).fill(""));
+        fbRefState.set({ status: 'playing', turn: 'p1', winner: null });
+    }
+
+
+    // ================= 3. CONNECT FOUR (4ROW) OYUN MANTIĞI =================
+    let c4Board = Array(42).fill("");
+    let c4Players = {}, c4State = {};
+    const C4_ROWS = 6, C4_COLS = 7;
+
+    function initConnect4Game() {
+        document.getElementById('c4-lobby-view').style.display = 'block';
+        document.getElementById('c4-game-view').style.display = 'none';
+        buildC4DomBoard();
+
+        fbRefPlayers.on('value', (snapshot) => {
+            c4Players = snapshot.val() || {};
+            updateC4LobbyUI();
+            checkC4Progression();
+        });
+        fbRefState.on('value', (snapshot) => {
+            c4State = snapshot.val() || { status: 'lobby', turn: 'p1' };
+            updateC4GameUI();
+        });
+        fbRefBoard.on('value', (snapshot) => {
+            c4Board = snapshot.val() || Array(42).fill("");
+            renderC4Board();
+        });
+    }
+
+    function buildC4DomBoard() {
+        const boardEl = document.getElementById('c4-board-element');
+        boardEl.innerHTML = "";
+        for(let i=0; i<42; i++) {
+            let cell = document.createElement('div');
+            cell.className = 'c4-cell';
+            cell.setAttribute('data-index', i);
+            cell.onclick = () => c4ClickColumn(i % C4_COLS);
+            boardEl.appendChild(cell);
+        }
+    }
+
+    function c4SelectRole(role) {
+        myRole = role;
+        fbRefPlayers.child(myId).set({ role: role });
+    }
+
+    function updateC4LobbyUI() {
+        let html = "";
+        Object.keys(c4Players).forEach(id => {
+            const isMe = id === myId ? " (Siz)" : " (Rakip)";
+            html += `<div>${c4Players[id].role === 'p1' ? '🔴 Kırmızı' : '🟡 Sarı'}: ${id}${isMe}</div>`;
+        });
+        document.getElementById('c4-lobby-status').innerHTML = html || "Rol seçimi yapın.";
+    }
+
+    function checkC4Progression() {
+        const list = Object.values(c4Players);
+        const p1 = list.find(p => p.role === 'p1');
+        const p2 = list.find(p => p.role === 'p2');
+
+        if(list.length === 2 && p1 && p2) {
+            if(c4State.status === 'lobby') {
+                fbRefBoard.set(Array(42).fill(""));
+                fbRefState.set({ status: 'playing', turn: 'p1', winner: null });
+            }
+        } else {
+            if(c4State.status !== 'lobby') fbRefState.set({ status: 'lobby', turn: 'p1' });
+        }
+    }
+
+    function updateC4GameUI() {
+        if(c4State.status === 'lobby') {
+            document.getElementById('c4-lobby-view').style.display = 'block';
+            document.getElementById('c4-game-view').style.display = 'none';
+            return;
+        }
+        document.getElementById('c4-lobby-view').style.display = 'none';
+        document.getElementById('c4-game-view').style.display = 'block';
+
+        const ind = document.getElementById('c4-turn-indicator');
+        const resArea = document.getElementById('c4-result-area');
+
+        if(c4State.status === 'finished') {
+            if(c4State.winner === 'draw') ind.innerText = "Oyun Berabere Bitmiştir!";
+            else ind.innerText = c4State.winner === myRole ? "🎉 Mükemmel! Kazandınız." : "💀 Kaybettiniz, rakip 4'ledi.";
+            resArea.innerHTML = `<button onclick="restartC4()" class="btn-switch">Yeniden Başlat</button>`;
+        } else {
+            ind.innerText = c4State.turn === myRole ? "Sıra Sizde! Üstten bırakmak istediğin sütuna tıkla." : "Rakibin hamlesi bekleniyor...";
+            resArea.innerHTML = "";
+        }
+    }
+
+    function renderC4Board() {
+        const cells = document.querySelectorAll('.c4-cell');
+        cells.forEach((cell, i) => {
+            let piece = cell.querySelector('.c4-piece');
+            if(c4Board[i]) {
+                if(!piece) {
+                    piece = document.createElement('div');
+                    cell.appendChild(piece);
+                }
+                piece.className = `c4-piece ${c4Board[i] === 'R' ? 'red' : 'yellow'}`;
+            } else {
+                if(piece) piece.remove();
+            }
+        });
+    }
+
+    function c4ClickColumn(col) {
+        if(c4State.status !== 'playing' || c4State.turn !== myRole) return;
+
+        // Aşağıdan yukarıya boş yer bulma simülasyonu
+        let targetedIndex = -1;
+        for (let row = C4_ROWS - 1; row >= 0; row--) {
+            let idx = row * C4_COLS + col;
+            if (!c4Board[idx]) {
+                targetedIndex = idx;
+                break;
+            }
+        }
+
+        if(targetedIndex === -1) return; // Sütun dolu
+
+        c4Board[targetedIndex] = myRole === 'p1' ? 'R' : 'Y';
+        fbRefBoard.set(c4Board);
+
+        if (checkC4WinCondition()) {
+            fbRefState.set({ status: 'finished', winner: myRole });
+        } else if (!c4Board.includes("")) {
+            fbRefState.set({ status: 'finished', winner: 'draw' });
+        } else {
+            fbRefState.update({ turn: myRole === 'p1' ? 'p2' : 'p1' });
+        }
+    }
+
+    function checkC4WinCondition() {
+        // Yatay Kontrol
+        for (let r = 0; r < C4_ROWS; r++) {
+            for (let c = 0; c < C4_COLS - 3; c++) {
+                let i = r * C4_COLS + c;
+                if (c4Board[i] && 
+                    c4Board[i] === c4Board[i + 1] && 
+                    c4Board[i] === c4Board[i + 2] && 
+                    c4Board[i] === c4Board[i + 3]) {
+                    return true;
+                }
+            }
+        }
+
+        // Dikey Kontrol
+        for (let r = 0; r < C4_ROWS - 3; r++) {
+            for (let c = 0; c < C4_COLS; c++) {
+                let i = r * C4_COLS + c;
+                if (c4Board[i] && 
+                    c4Board[i] === c4Board[i + C4_COLS] && 
+                    c4Board[i] === c4Board[i + 2 * C4_COLS] && 
+                    c4Board[i] === c4Board[i + 3 * C4_COLS]) {
+                    return true;
+                }
+            }
+        }
+
+        // Sağ Aşağı Çapraz Kontrol (\)
+        for (let r = 0; r < C4_ROWS - 3; r++) {
+            for (let c = 0; c < C4_COLS - 3; c++) {
+                let i = r * C4_COLS + c;
+                if (c4Board[i] && 
+                    c4Board[i] === c4Board[i + 8] && 
+                    c4Board[i] === c4Board[i + 16] && 
+                    c4Board[i] === c4Board[i + 24]) {
+                    return true;
+                }
+            }
+        }
+
+        // Sağ Yukarı Çapraz Kontrol (/)
+        for (let r = 3; r < C4_ROWS; r++) {
+            for (let c = 0; c < C4_COLS - 3; c++) {
+                let i = r * C4_COLS + c;
+                if (c4Board[i] && 
+                    c4Board[i] === c4Board[i - 6] && 
+                    c4Board[i] === c4Board[i - 12] && 
+                    c4Board[i] === c4Board[i - 18]) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    function restartC4() {
+        fbRefBoard.set(Array(42).fill(""));
+        fbRefState.set({ status: 'playing', turn: 'p1', winner: null });
+    }
+</script>
+
+</body>
+</html>
